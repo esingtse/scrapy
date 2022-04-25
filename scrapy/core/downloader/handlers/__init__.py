@@ -68,6 +68,7 @@ class DownloadHandlers:
             return dh
 
     def download_request(self, request, spider):
+        # 获取URL scheme
         scheme = urlparse_cached(request).scheme
         handler = self._get_handler(scheme)
         if not handler:

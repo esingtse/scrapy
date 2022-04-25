@@ -137,13 +137,35 @@ def iter_errback(iterable: Iterable, errback: Callable, *a, **kw) -> Generator:
 
 
 def deferred_from_coro(o) -> Any:
-    """Converts a coroutine into a Deferred, or returns the object as is if it isn't a coroutine"""
+    """converts a coroutine into a deferred, or returns the object as is if it isn't a coroutine"""
+    """将协程转换为dfd，或者如果它不是协程，则按原样返回对象"""
     if isinstance(o, Deferred):
         return o
     if asyncio.isfuture(o) or inspect.isawaitable(o):
-        if not is_asyncio_reactor_installed():
+        if not is_asyncio_reactor_installed():  # 判断当前reactor是否为AsyncioSelectorReactor
             # wrapping the coroutine directly into a Deferred, this doesn't work correctly with coroutines
             # that use asyncio, e.g. "await asyncio.sleep(1)"
+
+            # 使用ensureDeferred将允许在dfd上使用await，返回一个标准的Deferred，这也是scrapy2.0实验性支持协程语法的重大调整
+
+            # tips：当只使用协程的时候，不必用ensureDeferred。如果当前的a协程，调用了其他dfd上await的b协程，就可以用
+            """ example.py
+            
+            async def foo():
+                return await funA()
+                
+            async def bar():
+                funB_result = await funB()
+                foo_result = await foo()
+                return funB_result + foo_result
+                
+            def tmp():
+                t = bar()
+                return ensureDeferred(t)
+            """
+
+            # 验证了process_request之间的async嵌套调用
+            # 尽管 dfds在所有的协程中使用, 只有bar需要被用ensureDeferred装饰来返回一个dfd
             return ensureDeferred(o)
         else:
             # wrapping the coroutine into a Future and then into a Deferred, this requires AsyncioSelectorReactor

@@ -90,6 +90,8 @@ class Downloader:
             return response
 
         self.active.add(request)
+
+        # 进入下载器前，先过一边下载中间件里面的处理逻辑
         dfd = self.middleware.download(self._enqueue_request, request, spider)
         return dfd.addBoth(_deactivate)
 
@@ -97,7 +99,7 @@ class Downloader:
         return len(self.active) >= self.total_concurrency
 
     def _get_slot(self, request, spider):
-        key = self._get_slot_key(request, spider)
+        key = self._get_slot_key(request, spider)  # 根据request对象中的URL域名来获取对应的slot key
         if key not in self.slots:
             conc = self.ip_concurrency if self.ip_concurrency else self.domain_concurrency
             conc, delay = _get_concurrency_delay(conc, spider, self.settings)
@@ -116,23 +118,24 @@ class Downloader:
         return key
 
     def _enqueue_request(self, request, spider):
-        key, slot = self._get_slot(request, spider)
+        key, slot = self._get_slot(request, spider)  # 获取request相对应的Slot对象
         request.meta[self.DOWNLOAD_SLOT] = key
 
         def _deactivate(response):
             slot.active.remove(request)
             return response
 
-        slot.active.add(request)
+        slot.active.add(request)  # active属性中添加request
         self.signals.send_catch_log(signal=signals.request_reached_downloader,
                                     request=request,
                                     spider=spider)
         deferred = defer.Deferred().addBoth(_deactivate)
-        slot.queue.append((request, deferred))
+        slot.queue.append((request, deferred))  # 向slot的队列queue添加request和对应的deferred对象
         self._process_queue(spider, slot)
         return deferred
 
     def _process_queue(self, spider, slot):
+        """从slot对象的队列queue中获取请求并下载"""
         from twisted.internet import reactor
         if slot.latercall and slot.latercall.active():
             return
@@ -150,7 +153,7 @@ class Downloader:
         while slot.queue and slot.free_transfer_slots() > 0:
             slot.lastseen = now
             request, deferred = slot.queue.popleft()
-            dfd = self._download(slot, request, spider)
+            dfd = self._download(slot, request, spider)  # 开始下载，重点关注，从这里开始，就会由scrapy通过handler转由twisted去下载了
             dfd.chainDeferred(deferred)
             # prevent burst if inter-request delays were configured
             if delay:
@@ -165,6 +168,8 @@ class Downloader:
 
         # 2. Notify response_downloaded listeners about the recent download
         # before querying queue for next request
+
+        # 在查询队列以获取下一个请求之前，通知response_downloaded监听者
         def _downloaded(response):
             self.signals.send_catch_log(signal=signals.response_downloaded,
                                         response=response,
@@ -177,9 +182,12 @@ class Downloader:
         # state to free up the transferring slot so it can be used by the
         # following requests (perhaps those which came from the downloader
         # middleware itself)
+
+        # 将request加到slot集合中
         slot.transferring.add(request)
 
         def finish_transferring(_):
+            # 响应到达后，将请求从传输状态中删除以释放传输槽，以便后续请求使用它（可能来自下载器中间件本身的请求）
             slot.transferring.remove(request)
             self._process_queue(spider, slot)
             self.signals.send_catch_log(signal=signals.request_left_downloader,

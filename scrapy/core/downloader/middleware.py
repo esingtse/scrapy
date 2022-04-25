@@ -34,11 +34,19 @@ class DownloaderMiddlewareManager(MiddlewareManager):
             self.methods['process_exception'].appendleft(mw.process_exception)
 
     def download(self, download_func: Callable, request: Request, spider: Spider):
-        @defer.inlineCallbacks
+        """
+        dfd是用于控制异步代码执行流程的机制，一种对象被设计成用来做且仅做一件事，它只关心以何种顺序运行程序
+        
+        download_func 指的是self._enqueue_request方法，是一个dfd对象
+        """""
+
+        @defer.inlineCallbacks  # dfd装饰器，允许使用Deferreds而不用编写callback函数
         def process_request(request: Request):
-            for method in self.methods['process_request']:
-                method = cast(Callable, method)
-                response = yield deferred_from_coro(method(request=request, spider=spider))
+            for method in self.methods['process_request']:  # self.methods为Dict类型，从settings中读取所有中间件
+                method = cast(Callable, method)  # 把method强制转换为可调用类型
+                response = yield deferred_from_coro(method(request=request, spider=spider))  # yield Deferreds 来代替关联一个callback函数
+
+                # 如果response为None则继续下一跳process_request，返回Request或者Response对象则直接终止往后，抛出
                 if response is not None and not isinstance(response, (Response, Request)):
                     raise _InvalidOutput(
                         f"Middleware {method.__qualname__} must return None, Response or "

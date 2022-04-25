@@ -242,8 +242,10 @@ class ScrapyProxyAgent(Agent):
         """
         # Cache *all* connections under the same key, since we are only
         # connecting to a single destination, the proxy:
+
+        # 这里返回的也是一个dfd
         return self._requestWithEndpoint(
-            key=("http-proxy", self._proxyURI.host, self._proxyURI.port),
+            key=("http-proxy", self._proxyURI.host, self._proxyURI.port),  # 代理
             endpoint=self._getEndpoint(self._proxyURI),
             method=method,
             parsedURI=URI.fromBytes(uri),
@@ -324,7 +326,7 @@ class ScrapyAgent:
     def download_request(self, request):
         from twisted.internet import reactor
         timeout = request.meta.get('download_timeout') or self._connectTimeout
-        agent = self._get_agent(request, timeout)
+        agent = self._get_agent(request, timeout)  # 获取对应的agent，例如是否用了代理，等等
 
         # request details
         url = urldefrag(request.url)[0]
@@ -337,6 +339,8 @@ class ScrapyAgent:
         else:
             bodyproducer = None
         start_time = time()
+
+        # 返回的是从twisted上抛的一个dfd
         d = agent.request(method, to_bytes(url, encoding='ascii'), headers, bodyproducer)
         # set download latency
         d.addCallback(self._cb_latency, request, start_time)
