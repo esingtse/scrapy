@@ -129,6 +129,10 @@ class SpiderMiddlewareManager(MiddlewareManager):
 
     def scrape_response(self, scrape_func: ScrapeFunc, response: Response, request: Request,
                         spider: Spider) -> Deferred:
+        """
+        这个方法首先依次调用中间件的'process_spider_input'方法，然后调用传递进来的scrap_func，也就是call_spider方法，如果某个中间件的'process_spider_input'方法抛出了异常，则以Failure调用call_spider方法。
+如果所有中间件都处理成功，且call_spider也返回成功，则调用'process_spider_output'方法，这个方法依次调用中间件的'process_spider_output'方法
+        """
         def process_callback_output(result: Iterable) -> MutableChain:
             return self._process_callback_output(response, spider, result)
 

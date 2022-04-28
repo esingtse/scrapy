@@ -16,6 +16,14 @@ from scrapy.core.downloader.handlers import DownloadHandlers
 class Slot:
     """Downloader slot"""
 
+    """
+    何为Downloader Slot？在下载中间件中，slot可以理解为一个"插槽"，它是由一个字典类型实例化而成，slots里面存储了各种各种各样的Slot对象，其中key是
+    request对象的域名，value是Slot对象。Slot对象用来控制Request的下载请求，一般由这些属性组成：（这个域名下的）并发值、下载延迟、随机延迟等
+    这些属性主要是为了控制一个域名的请求策略，可以针对这个域名避免流量过大而ban ip的情况
+    
+    要注意，跟引擎的slot有些区别，当本质都是理解为一个"插槽"，用于控制每个爬虫/请求的组合件
+    """
+
     def __init__(self, concurrency, delay, randomize_delay):
         self.concurrency = concurrency
         self.delay = delay
@@ -113,7 +121,7 @@ class Downloader:
 
         key = urlparse_cached(request).hostname or ''
         if self.ip_concurrency:
-            key = dnscache.get(key, key)
+            key = dnscache.get(key, key)  # 去DNS缓存中获取对应的IP键
 
         return key
 

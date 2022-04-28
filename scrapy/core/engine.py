@@ -32,6 +32,10 @@ logger = logging.getLogger(__name__)
 
 
 class Slot:
+    """
+    此处的Slot代表的是一次nextcall的执行，实际上就是执行一次engine的_next_request
+    可以理解为一个request的生命周期
+    """
     def __init__(
         self,
         start_requests: Iterable,
@@ -40,12 +44,12 @@ class Slot:
         scheduler,
     ) -> None:
         self.closing: Optional[Deferred] = None
-        self.inprogress: Set[Request] = set()
+        self.inprogress: Set[Request] = set() # 跟踪正在进行的request请求
         self.start_requests: Optional[Iterator] = iter(start_requests)
         self.close_if_idle = close_if_idle
         self.nextcall = nextcall
         self.scheduler = scheduler
-        self.heartbeat = LoopingCall(nextcall.schedule)
+        self.heartbeat = LoopingCall(nextcall.schedule)  # 心跳，5s一次，尝试处理新的request
 
     def add_request(self, request: Request) -> None:
         self.inprogress.add(request)
@@ -168,6 +172,9 @@ class ExecutionEngine:
         )
 
     def _next_request_from_scheduler(self) -> Optional[Deferred]:
+        """
+        从scheduler中获取一个请求后，调用_download方法进行下载，然后给这个Deferred安装了一个callback方法_handle_downloader_output来处理下载完成后的操作。最后会移除请求并再一次调用nextcall的schedule来处理新请求
+        """
         assert self.slot is not None  # typing
         assert self.spider is not None  # typing
 
@@ -175,7 +182,7 @@ class ExecutionEngine:
         if request is None:
             return None
 
-        d = self._download(request, self.spider)
+        d = self._download(request, self.spider)  # 开始下载喽
         d.addBoth(self._handle_downloader_output, request)
         d.addErrback(lambda f: logger.info('Error while handling downloader output',
                                            exc_info=failure_to_exc_info(f),
@@ -193,6 +200,7 @@ class ExecutionEngine:
     def _handle_downloader_output(
         self, result: Union[Request, Response, Failure], request: Request
     ) -> Optional[Deferred]:
+        """如果返回的response是Request则继续调用crawl方法入schdeuler队列，否则则调用scraper的enqueue_scrape方法"""
         assert self.spider is not None  # typing
 
         if not isinstance(result, (Request, Response, Failure)):
@@ -308,6 +316,10 @@ class ExecutionEngine:
 
     @inlineCallbacks
     def open_spider(self, spider: Spider, start_requests: Iterable = (), close_if_idle: bool = True):
+        """
+        流程图
+        https://docs.scrapy.org/en/latest/topics/architecture.html
+        """
         if self.slot is not None:
             raise RuntimeError(f"No free spider slot when opening {spider.name!r}")
         logger.info("Spider opened", extra={'spider': spider})
@@ -319,7 +331,7 @@ class ExecutionEngine:
         if hasattr(scheduler, "open"):
             yield scheduler.open(spider)
         yield self.scraper.open_spider(spider)
-        self.crawler.stats.open_spider(spider)
+        self.crawler.stats.open_spider(spider)  # stats为记录状态的类，用来记录整个爬取过程中的关键状态
         yield self.signals.send_catch_log_deferred(signals.spider_opened, spider=spider)
         self.slot.nextcall.schedule()
         self.slot.heartbeat.start(5)

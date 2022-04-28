@@ -340,7 +340,7 @@ class ScrapyAgent:
             bodyproducer = None
         start_time = time()
 
-        # 返回的是从twisted上抛的一个dfd
+        # 返回的是从twisted上抛的一个dfd，twisted.web.client.Agent.request
         d = agent.request(method, to_bytes(url, encoding='ascii'), headers, bodyproducer)
         # set download latency
         d.addCallback(self._cb_latency, request, start_time)

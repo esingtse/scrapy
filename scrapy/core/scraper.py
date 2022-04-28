@@ -67,13 +67,20 @@ class Slot:
 
 
 class Scraper:
+    """
+    对spider中间件进行管理，通过中间件完成请求，响应，数据分析等工作
+
+    对于一个下载的网页，会先调用各个spider中间件的'process_spider_input'方法处理，如果全部
+    处理成功则调用request.callback或者spider.parse方法进行分析，然后将分析的结果调用各个spider中间件的‘process_spider_output'
+    处理，都处理成功了再交给ItemPipeLine进行处理，ItemPipeLine调用定义的'process_item'处理爬取到的数据结果
+    """
 
     def __init__(self, crawler):
         self.slot: Optional[Slot] = None
         self.spidermw = SpiderMiddlewareManager.from_crawler(crawler)
-        itemproc_cls = load_object(crawler.settings['ITEM_PROCESSOR'])
+        itemproc_cls = load_object(crawler.settings['ITEM_PROCESSOR'])  # 从配置文件中获取ITEM_PROCESSOR，默认是scrapy.pipelines.ItemPipelineManager，其实背后也是一个中间件管理器，用于管理piplines
         self.itemproc = itemproc_cls.from_crawler(crawler)
-        self.concurrent_items = crawler.settings.getint('CONCURRENT_ITEMS')
+        self.concurrent_items = crawler.settings.getint('CONCURRENT_ITEMS')  # 控制同时处理的爬取到的item的数据数目
         self.crawler = crawler
         self.signals = crawler.signals
         self.logformatter = crawler.logformatter
@@ -81,6 +88,7 @@ class Scraper:
     @inlineCallbacks
     def open_spider(self, spider: Spider):
         """Open the given spider for scraping and allocate resources for it"""
+        """声明了一个Slot,如果item管理器中的中间件定义了open_spider方法则调用它"""
         self.slot = Slot(self.crawler.settings.getint('SCRAPER_SLOT_MAX_ACTIVE_SIZE'))
         yield self.itemproc.open_spider(spider)
 
@@ -103,6 +111,7 @@ class Scraper:
             self.slot.closing.callback(spider)
 
     def enqueue_scrape(self, result: Union[Response, Failure], request: Request, spider: Spider) -> Deferred:
+        """把要分析的response放入自己的队列中，然后为这个response返回的deferred添加一个finish_scraping方法，用来处理scraping完成后的操作，然后调用_scrape_next处理队列中的response."""
         if self.slot is None:
             raise RuntimeError("Scraper slot not assigned")
         dfd = self.slot.add_response_request(result, request)
@@ -123,6 +132,7 @@ class Scraper:
         return dfd
 
     def _scrape_next(self, spider: Spider) -> None:
+        """不断从队列中获取response来调用_scrape方法，并在_scrape后调用原来安装的finish_scraping方法"""
         assert self.slot is not None  # typing
         while self.slot.queue:
             response, request, deferred = self.slot.next_response_request_deferred()
@@ -132,6 +142,7 @@ class Scraper:
         """
         Handle the downloaded response or failure through the spider callback/errback
         """
+        """该方法调用_scrape2后，会给deferred加入handle_spider_output方法，说明在_scrape2处理完成后会调用handle_spider_output方法"""
         if not isinstance(result, (Response, Failure)):
             raise TypeError(f"Incorrect type: expected Response or Failure, got {type(result)}: {result!r}")
         dfd = self._scrape2(result, request, spider)  # returns spider's processed output
@@ -143,6 +154,7 @@ class Scraper:
         """
         Handle the different cases of request's result been a Response or a Failure
         """
+        """判断如果request_result不是错误就调用spider中间件管理器的scrape_response方法"""
         if isinstance(result, Response):
             return self.spidermw.scrape_response(self.call_spider, result, request, spider)
         else:  # result is a Failure
@@ -150,6 +162,11 @@ class Scraper:
             return dfd.addErrback(self._log_download_errors, result, request, spider)
 
     def call_spider(self, result: Union[Response, Failure], request: Request, spider: Spider) -> Deferred:
+        """
+        会对返回的response调用request对象内的callback或者spider.parse方法
+
+        如果Request定义了callback则优先调用callback分析，如果没有则调用spider的parse方法分析
+        """
         if isinstance(result, Response):
             if getattr(result, "request", None) is None:
                 result.request = request
