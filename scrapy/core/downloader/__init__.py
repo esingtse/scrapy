@@ -139,7 +139,7 @@ class Downloader:
                                     spider=spider)
         deferred = defer.Deferred().addBoth(_deactivate)
         slot.queue.append((request, deferred))  # 向slot的队列queue添加request和对应的deferred对象
-        self._process_queue(spider, slot)
+        self._process_queue(spider, slot)  # 从slot对象的队列queue中获取请求并下载
         return deferred
 
     def _process_queue(self, spider, slot):

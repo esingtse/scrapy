@@ -1,6 +1,6 @@
 from twisted.internet import defer
 
-TARGET = 10000
+TARGET = 1000000
 
 def largeFibonnaciNumber():
     d = defer.Deferred()
@@ -13,8 +13,8 @@ def largeFibonnaciNumber():
         first = second
         second = new
 
-        if i % 100 == 0:
-            print(f"calculating the {i}th Fibonnaci number")
+        # if i % 100 == 0:
+        #     print(f"calculating the {i}th Fibonnaci number")
 
     d.callback(second)
 
@@ -25,20 +25,26 @@ import time
 start_time = time.time()
 d = largeFibonnaciNumber()
 end_time = time.time()
-
 print(f"spend time {end_time-start_time}")
 
+
 def printNumber(num):
-    print(f"the {TARGET}th Fibonacci number is {num}")
+    print(f"the {TARGET}th Fibonacci number is ***")
+
 
 print("Adding the callback now")
 d.addCallback(printNumber)
 
-
+"""期望的运行方式：（异步形式，如果计算结果足够大，将会消耗更长的时间，此举为模拟出阻塞的操作）
+1、异步运行斐波那契数列的计算（长阻塞操作）
+2、马上输出spend time，因为是异步处理
+3、马上输出Adding the callback now
+4、最后返回第n-1次计算的值
+"""
 
 
 """
-代码没有预期地执行异步才做，从结果上来看，是先计算完斐波那契数列，再输出时间，最后才触发回调，整体看起来就像是同步的操作
+代码没有预期地执行异步，从结果上来看，是先计算完斐波那契数列，再输出时间，最后才触发回调，整体看起来就像是同步的操作
 callback并没有在结果返回前添加到deferred对象中，也没有在结果返回时调用，甚至在计算完成之后它也没有添加到deferred对象中。
 
 函数在返回之前已经完成了计算，计算阻塞了当前进程直到完成，这是异步代码不会做的。因此Deferred不是非阻塞代码的万金油：它们是异步函数用来传递结果给callbacks的信号，但是使用Deferred不保证你得到一个异步函数
@@ -51,10 +57,10 @@ callback并没有在结果返回前添加到deferred对象中，也没有在结�
 """
 
 # from twisted.internet import threads, reactor
-#
+# import time
 #
 # def largeFibonnaciNumber():
-#     t = 10000
+#     t = 1000000
 #
 #     first = 0
 #     second = 1
@@ -64,22 +70,23 @@ callback并没有在结果返回前添加到deferred对象中，也没有在结�
 #         first = second
 #         second = new
 #
-#         if i%100 == 0:
+#         if i%10000 == 0:
 #             print(f"calculating the {i}th Fibonnaci number")
 #
 #     return second
 #
 #
 # def fiboCallback(result):
-#     print(f"large Fibo result is {result}")
+#     print(f"large Fibo result is ***")
 #     reactor.stop()
 #
 #
 # def run():
+#     start_time = time.time()
 #     d = threads.deferToThread(largeFibonnaciNumber)
 #     d.addCallback(fiboCallback)
-#     print("1")
-#     print("2")
+#     end_time = time.time() - start_time
+#     print(f"spend time {end_time}")
 #
 #
 # if __name__ == "__main__":

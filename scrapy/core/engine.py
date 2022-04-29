@@ -44,7 +44,7 @@ class Slot:
         scheduler,
     ) -> None:
         self.closing: Optional[Deferred] = None
-        self.inprogress: Set[Request] = set() # 跟踪正在进行的request请求
+        self.inprogress: Set[Request] = set()  # 跟踪正在进行的request请求
         self.start_requests: Optional[Iterator] = iter(start_requests)
         self.close_if_idle = close_if_idle
         self.nextcall = nextcall
@@ -323,7 +323,7 @@ class ExecutionEngine:
         if self.slot is not None:
             raise RuntimeError(f"No free spider slot when opening {spider.name!r}")
         logger.info("Spider opened", extra={'spider': spider})
-        nextcall = CallLaterOnce(self._next_request)
+        nextcall = CallLaterOnce(self._next_request)  # 调度器关键点
         scheduler = create_instance(self.scheduler_cls, settings=None, crawler=self.crawler)
         start_requests = yield self.scraper.spidermw.process_start_requests(start_requests, spider)
         self.slot = Slot(start_requests, close_if_idle, nextcall, scheduler)
